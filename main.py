@@ -1,22 +1,35 @@
-from ingestion.feed_puller import fetch_articles
-from processing.normalizer import normalize_article
-import json
+# main.py
+import asyncio
+import uvicorn
+from fastapi import FastAPI
+from loguru import logger
+from api.server import app as api_app
+from agents.orchestrator import NewsOrchestrator
+from config.settings import Settings
 
-articles = fetch_articles("https://feeds.bbci.co.uk/news/world/rss.xml")
+def main():
+    """Main entry point for the AI News Feed Ingestion & Processing Service"""
+    settings = Settings()
+    
+    # Initialize the orchestrator
+    orchestrator = NewsOrchestrator()
+    
+    # Start the background processing
+    async def start_background_tasks():
+        logger.info("Starting background news processing tasks...")
+        await orchestrator.start_processing()
+    
+    # Run background tasks
+    asyncio.create_task(start_background_tasks())
+    
+    # Start the API server
+    logger.info(f"Starting API server on {settings.host}:{settings.port}")
+    uvicorn.run(
+        api_app,
+        host=settings.host,
+        port=settings.port,
+        log_level="info"
+    )
 
-print(f"\n✅ Pulled {len(articles)} articles:\n")
-
-normalized_articles = []
-for article in articles:
-    print(f"DEBUG ➤ Article:\n{article}\n")
-    normalized = normalize_article(article)
-    if normalized:
-        normalized_articles.append(normalized)
-        print(f"📰 {normalized['title']} — {normalized['language']}")
-    else:
-        print("❌ Normalization failed.\n")
-
-with open("output/normalized_articles.json", "w", encoding="utf-8") as f:
-    json.dump(normalized_articles, f, ensure_ascii=False, indent=2)
-
-print(f"\n✅ Saved {len(normalized_articles)} normalized articles to output/normalized_articles.json")
+if __name__ == "__main__":
+    main()
